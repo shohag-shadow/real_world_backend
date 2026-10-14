@@ -1,20 +1,26 @@
 package main
 
 import (
-	"fmt"
+	"log"
 
 	"real_world_backend/db"
-	"real_world_backend/models"
+
+	"real_world_backend/routes"
+
+	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
-
-	db := db.GetDB()
-	newUser := models.User{Name: "w3e63", Email: "w3e63@example.com"}
-	result := db.Create(&newUser)
-	if result.Error != nil {
-		fmt.Printf("Notice: Record might already exist (%v)\n", result.Error)
-	} else {
-		fmt.Printf("Successfully inserted user with ID: %d\n", newUser.ID)
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading environment using proper machiene environment")
 	}
+	db := db.GetDB()
+	if db != nil {
+		log.Println("Connected to database and working")
+	}
+	app := gin.Default()
+	routes.RegisterRoutes(app)
+	app.Run()
 }

@@ -1,0 +1,7 @@
+BEGIN;
+
+DROP INDEX IF EXISTS user_email_unique;
+
+DROP TABLE IF EXISTS users;
+
+COMMIT;
