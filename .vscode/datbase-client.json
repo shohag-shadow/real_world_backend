@@ -1,0 +1,45 @@
+{
+    "database.connections": {
+        "1792124182718": {
+            "host": "localhost",
+            "dbPath": "",
+            "port": "5442",
+            "user": "app",
+            "authType": "default",
+            "password": "secret",
+            "encoding": "utf8",
+            "clientKeyPath": null,
+            "clientCertPath": null,
+            "caPath": null,
+            "database": "postgres",
+            "useSSL": false,
+            "useClearText": false,
+            "usingSSH": false,
+            "showHidden": false,
+            "includeDatabases": null,
+            "dbType": "PostgreSQL",
+            "encrypt": false,
+            "isCluster": false,
+            "connectionUrl": "postgres://app:secret@localhost:5442/real_world_db?sslmode=disable",
+            "srv": false,
+            "esAuth": "none",
+            "global": false,
+            "key": "1792124182718",
+            "timezone": "+00:00",
+            "ssh": {
+                "host": "",
+                "privateKeyPath": "/home/w3e63/.ssh/id_rsa",
+                "port": 22,
+                "username": "root",
+                "type": "password",
+                "connectTimeout": 10000,
+                "algorithms": {
+                    "cipher": []
+                }
+            },
+            "name": "real world db",
+            "useConnectionString": true,
+            "connectionKey": "database.connections"
+        }
+    }
+}
