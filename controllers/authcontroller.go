@@ -37,13 +37,13 @@ func Login(c *gin.Context) {
 	}
 	db := db.GetDB()
 	var user models.User
+	var passHash = "$argon2id$v=19$m=65536$t=3$p=4$fvbE8VrW7tXvWCT4rZMpIw$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 	dberr := db.WithContext(c).Where("email = ?", strings.ToLower(strings.TrimSpace(input.Email))).First(&user).Error
-	if dberr != nil {
-		c.JSON(http.StatusNotFound, gin.H{"messege": "user not found"})
-		return
+	if dberr == nil {
+		passHash = user.PasswordHash
 	}
 
-	if !verifyPassword(input.Password, user.PasswordHash) {
+	if !verifyPassword(input.Password, passHash) {
 		c.JSON(http.StatusBadRequest, gin.H{"messege": "passord is wrong"})
 		return
 	}
