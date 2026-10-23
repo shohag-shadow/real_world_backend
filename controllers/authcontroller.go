@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -8,6 +9,7 @@ import (
 	"real_world_backend/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"real_world_backend/services"
 )
@@ -75,4 +77,26 @@ func Signup(c *gin.Context) {
 		"User":    user,
 	})
 
+}
+
+func Me(c *gin.Context) {
+	id, found := c.Get("userID")
+	if !found {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user id not found"})
+		return
+	}
+
+	conn := db.GetDB()
+	var user models.User
+	err := conn.WithContext(c).First(&user, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, user)
 }
