@@ -2,16 +2,19 @@ package controllers
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"real_world_backend/db"
 	"real_world_backend/models"
 
-	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
-
 	"real_world_backend/services"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type SignupInput struct {
@@ -20,8 +23,9 @@ type SignupInput struct {
 	Password string `json:"password" binding:"required,min=6"`
 }
 type LoginInput struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6"`
+	Email     string `json:"email" binding:"required,email"`
+	Password  string `json:"password" binding:"required,min=6"`
+	UserAgent string `json:"user_agent" binding:"required"`
 }
 
 func Login(c *gin.Context) {
@@ -29,6 +33,7 @@ func Login(c *gin.Context) {
 	err := c.ShouldBindJSON(&input)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 	db := db.GetDB()
 	var user models.User
@@ -47,7 +52,26 @@ func Login(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"messege": "error during creading token", "error": tokenerr.Error()})
 		return
 	}
-	c.JSON(http.StatusAccepted, gin.H{"token": token})
+	if err := services.RevokeAllUserTokens(db, user.ID, time.Now()); err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+	}
+	tokenFamily := uuid.New().String()
+
+	tokenRaw, newToken, err := services.NewRefreshToken(user.ID, tokenFamily, input.UserAgent)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := db.Create(newToken).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, services.TokenPair{
+		AccessToken:  token,
+		ExpeiresIn:   newToken.ExpiresAt.Unix(),
+		RefreshToken: tokenRaw,
+		TokenType:    "Bearer",
+	})
 }
 
 func Signup(c *gin.Context) {
@@ -94,9 +118,62 @@ func Me(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "hi"})
 		return
 	}
 
 	c.JSON(http.StatusOK, user)
+}
+
+type refreshInput struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+func Refresh(c *gin.Context) {
+	var input refreshInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	conn := db.GetDB()
+	token, err := services.ConsumeRefreshToken(conn, services.HashToken(input.RefreshToken), time.Now())
+	if err != nil {
+		if errors.Is(err, services.ErrInvalidRefreshToken) {
+			c.JSON(http.StatusBadRequest, err.Error())
+			return
+		}
+		if errors.Is(err, services.ErrRefreshTokenReused) {
+			services.RevokeFamily(conn, token.FamilyID, time.Now())
+			c.JSON(http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+	log.Print("consumed")
+	tokenRaw, newToken, err := services.NewRefreshToken(token.UserID, token.FamilyID, token.UserAgent)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := conn.Create(newToken).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	var user models.User
+	if err := conn.WithContext(c).Where("ID=?", newToken.UserID).First(&user).Error; err != nil {
+		c.JSON(http.StatusBadRequest, err.Error())
+		return
+	}
+	log.Print(user)
+	accessToken, err := services.GenerateToken(user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, services.TokenPair{
+		AccessToken:  accessToken,
+		ExpeiresIn:   newToken.ExpiresAt.Unix(),
+		RefreshToken: tokenRaw,
+		TokenType:    "Bearer",
+	})
 }
