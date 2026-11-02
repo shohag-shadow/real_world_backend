@@ -16,6 +16,7 @@ func RegisterRoutes(app *gin.Engine) {
 		api.POST("/signup", controllers.Signup)
 		api.POST("/login", controllers.Login)
 		api.POST("/refresh", controllers.Refresh)
+		api.POST("/logout", controllers.Logout)
 	}
 	api.GET("/me", middlewires.AuthRequired(), controllers.Me)
 

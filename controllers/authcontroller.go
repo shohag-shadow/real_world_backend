@@ -17,11 +17,6 @@ import (
 	"gorm.io/gorm"
 )
 
-type SignupInput struct {
-	Name     string `json:"name" binding:"required"`
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6"`
-}
 type LoginInput struct {
 	Email     string `json:"email" binding:"required,email"`
 	Password  string `json:"password" binding:"required,min=6"`
@@ -52,9 +47,6 @@ func Login(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"messege": "error during creading token", "error": tokenerr.Error()})
 		return
 	}
-	if err := services.RevokeAllUserTokens(db, user.ID, time.Now()); err != nil {
-		c.JSON(http.StatusInternalServerError, err.Error())
-	}
 	tokenFamily := uuid.New().String()
 
 	tokenRaw, newToken, err := services.NewRefreshToken(user.ID, tokenFamily, input.UserAgent)
@@ -72,6 +64,12 @@ func Login(c *gin.Context) {
 		RefreshToken: tokenRaw,
 		TokenType:    "Bearer",
 	})
+}
+
+type SignupInput struct {
+	Name     string `json:"name" binding:"required"`
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,min=6"`
 }
 
 func Signup(c *gin.Context) {
@@ -176,4 +174,32 @@ func Refresh(c *gin.Context) {
 		RefreshToken: tokenRaw,
 		TokenType:    "Bearer",
 	})
+}
+
+type LogoutInput struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+func Logout(c *gin.Context) {
+	var input LogoutInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	conn := db.GetDB()
+	var token models.RefreshToken
+	err := conn.Where("token_hash = ?", services.HashToken(input.RefreshToken)).First(&token).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := services.RevokeFamily(db.GetDB(), token.FamilyID, time.Now()); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
